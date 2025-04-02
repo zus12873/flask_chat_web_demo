@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    html, body {
+        background-color: #f8f9fa;
+        height: 100%;
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+    }
+    .chat-container {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        background-color: #fff;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+    }
+    .chat-header {
+        padding: 1rem;
+        border-bottom: 1px solid #dee2e6;
+        background-color: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        flex-shrink: 0;
+    }
+    .message-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        -webkit-overflow-scrolling: touch;
+    }
+    .message {
+        margin-bottom: 1rem;
+        max-width: 70%;
+        display: flex;
+        flex-direction: column;
+    }
+    .message.sent {
+        margin-left: auto;
+        align-items: flex-end;
+    }
+    .message.received {
+        margin-right: auto;
+        align-items: flex-start;
+    }
+    .message-content {
+        padding: 0.8rem 1rem;
+        border-radius: 1rem;
+        position: relative;
+        word-wrap: break-word;
+    }
+    .message.sent .message-content {
+        background-color: #007bff;
+        color: white;
+        border-top-right-radius: 0.2rem;
+    }
+    .message.received .message-content {
+        background-color: #e9ecef;
+        border-top-left-radius: 0.2rem;
+    }
+    .message-time {
+        font-size: 0.75rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    .message.sent .message-time {
+        color: rgba(255, 255, 255, 0.8);
+    }
+    .chat-input-area {
+        padding: 1rem;
+        background-color: #fff;
+        border-top: 1px solid #dee2e6;
+        position: sticky;
+        bottom: 0;
+        z-index: 1000;
+        flex-shrink: 0;
+    }
+    #voice-record-btn, #image-upload-btn {
+        transition: all 0.3s ease;
+        padding: 0.5rem 1rem;
+    }
+    #voice-record-btn.btn-danger {
+        animation: pulse 1.5s infinite;
+    }
+    .message-content img {
+        max-width: 300px;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .message.sent .message-content img {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .message.received .message-content img {
+        border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    .message-content audio {
+        max-width: 250px;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+    /* 自定义滚动条样式 */
+    .message-list::-webkit-scrollbar {
+        width: 6px;
+    }
+    .message-list::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+    .message-list::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+    }
+    .message-list::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+    .status-indicator {
+        font-size: 0.8em;
+        padding: 5px 10px;
+        transition: all 0.3s ease;
+    }
+    
+    .status-indicator.online {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .status-indicator.offline {
+        background-color: #6c757d;
+        color: white;
+    }
+    
+    .status-indicator.typing {
+        background-color: #ffc107;
+        color: black;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <div class="chat-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <a href="{{ url_for('users') }}" class="text-decoration-none">
+                    <i class="bi bi-arrow-left me-2"></i>返回
+                </a>
+                与 {{ receiver.username }} 聊天
+                <span class="status-indicator {% if receiver.is_online %}online{% else %}offline{% endif %}" data-user-id="{{ receiver.id }}">
+                    {{ '在线' if receiver.is_online else '离线' }}
+                </span>
+            </h5>
+        </div>
+    </div>
+    
+    <div class="message-list" id="message-list">
+        {% for message in messages %}
+        <div class="message {{ 'sent' if message.sender_id == current_user.id else 'received' }}">
+            <div class="message-content">
+                {% if message.message_type == 'text' %}
+                    {{ message.content }}
+                {% elif message.message_type == 'voice' %}
+                    <audio controls>
+                        <source src="{{ message.content }}" type="audio/webm">
+                        <source src="{{ message.content }}" type="audio/mp4">
+                        <source src="{{ message.content }}" type="audio/wav">
+                        您的浏览器不支持音频播放
+                    </audio>
+                {% elif message.message_type == 'image' %}
+                    <img src="{{ message.content }}" alt="图片消息">
+                {% endif %}
+                <div class="message-time">{{ message.timestamp.strftime('%H:%M') }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="chat-input-area">
+        <form id="message-form">
+            <div class="input-group">
+                <input type="text" class="form-control" id="message-input" placeholder="输入消息...">
+                <input type="file" class="d-none" id="image-input" accept="image/*">
+                <button type="button" class="btn btn-outline-primary" id="image-upload-btn">
+                    <i class="bi bi-image"></i>
+                </button>
+                <button type="button" class="btn btn-outline-primary" id="voice-record-btn">
+                    <i class="bi bi-mic"></i>
+                </button>
+                <button class="btn btn-primary" type="submit">发送</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 录音提示模态框 -->
+<div class="modal fade" id="recordingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <i class="bi bi-mic-fill text-danger fa-3x mb-3"></i>
+                <h5>正在录音...</h5>
+                <p class="text-muted">点击"停止"按钮结束录音</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-danger" id="stop-recording-btn">停止</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+    const socket = io();
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    const messageList = document.getElementById('message-list');
+    const voiceRecordBtn = document.getElementById('voice-record-btn');
+    const imageUploadBtn = document.getElementById('image-upload-btn');
+    const imageInput = document.getElementById('image-input');
+    const recordingModal = new bootstrap.Modal(document.getElementById('recordingModal'));
+    const stopRecordingBtn = document.getElementById('stop-recording-btn');
+    
+    let mediaRecorder;
+    let audioChunks = [];
+    let isRecording = false;
+    let typingTimeout;
+    
+    // 更新用户状态
+    function updateUserStatus(userId, isOnline, isTyping = false) {
+        const statusIndicator = document.querySelector(`.status-indicator[data-user-id="${userId}"]`);
+        if (statusIndicator) {
+            if (isTyping) {
+                statusIndicator.className = 'status-indicator typing';
+                statusIndicator.textContent = '正在输入...';
+                
+                // 3秒后恢复在线状态
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(() => {
+                    statusIndicator.className = 'status-indicator online';
+                    statusIndicator.textContent = '在线';
+                }, 3000);
+            } else {
+                statusIndicator.className = `status-indicator ${isOnline ? 'online' : 'offline'}`;
+                statusIndicator.textContent = isOnline ? '在线' : '离线';
+            }
+        }
+    }
+    
+    // 接收用户状态更新
+    socket.on('user_status_update', function(data) {
+        updateUserStatus(data.user_id, data.is_online);
+    });
+    
+    // 接收用户正在输入状态
+    socket.on('user_typing', function(data) {
+        if (data.user_id === {{ receiver.id }}) {
+            updateUserStatus(data.user_id, true, true);
+        }
+    });
+    
+    // 监听输入框变化，发送正在输入状态
+    messageInput.addEventListener('input', function() {
+        socket.emit('typing', { receiver_id: {{ receiver.id }} });
+    });
+    
+    // 加入聊天室
+    socket.emit('join', { receiver_id: {{ receiver.id }} });
+    
+    // 发送消息
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const content = messageInput.value.trim();
+        if (content) {
+            socket.emit('send_message', {
+                content: content,
+                receiver_id: {{ receiver.id }},
+                message_type: 'text'
+            });
+            messageInput.value = '';
+        }
+    });
+    
+    // 接收消息
+    socket.on('receive_message', function(data) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${data.sender_id == {{ current_user.id }} ? 'sent' : 'received'}`;
+        
+        let contentHtml = '';
+        if (data.message_type === 'text') {
+            contentHtml = data.content;
+        } else if (data.message_type === 'voice') {
+            contentHtml = `<audio controls>
+                <source src="${data.content}" type="audio/webm">
+                <source src="${data.content}" type="audio/mp4">
+                <source src="${data.content}" type="audio/wav">
+                您的浏览器不支持音频播放
+            </audio>`;
+        } else if (data.message_type === 'image') {
+            contentHtml = `<img src="${data.content}" alt="图片消息">`;
+        }
+        
+        messageDiv.innerHTML = `
+            <div class="message-content">
+                ${contentHtml}
+                <div class="message-time">${data.timestamp}</div>
+            </div>
+        `;
+        
+        messageList.appendChild(messageDiv);
+        messageList.scrollTop = messageList.scrollHeight;
+    });
+    
+    // 语音录制功能
+    voiceRecordBtn.addEventListener('click', async function() {
+        if (!isRecording) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const formData = new FormData();
+                    formData.append('audio', audioBlob);
+                    
+                    try {
+                        const response = await fetch('/upload_voice', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            socket.emit('send_message', {
+                                content: data.url,
+                                receiver_id: {{ receiver.id }},
+                                message_type: 'voice'
+                            });
+                        }
+                    } catch (error) {
+                        console.error('Error uploading voice message:', error);
+                    }
+                };
+                
+                mediaRecorder.start();
+                isRecording = true;
+                recordingModal.show();
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+            }
+        }
+    });
+    
+    stopRecordingBtn.addEventListener('click', function() {
+        if (isRecording && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            isRecording = false;
+            recordingModal.hide();
+        }
+    });
+    
+    // 图片上传功能
+    imageUploadBtn.addEventListener('click', function() {
+        imageInput.click();
+    });
+    
+    imageInput.addEventListener('change', async function() {
+        const file = this.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            try {
+                const response = await fetch('/upload_image', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    socket.emit('send_message', {
+                        content: data.url,
+                        receiver_id: {{ receiver.id }},
+                        message_type: 'image'
+                    });
+                }
+            } catch (error) {
+                console.error('Error uploading image:', error);
+            }
+        }
+    });
+    
+    // 页面离开时离开聊天室
+    window.addEventListener('beforeunload', function() {
+        socket.emit('leave', { receiver_id: {{ receiver.id }} });
+    });
+</script>
+{% endblock %} 

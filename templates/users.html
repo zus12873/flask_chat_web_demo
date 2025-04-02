@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">用户列表</h4>
+                </div>
+                <div class="card-body">
+                    <div class="list-group" id="users-list">
+                        {% for user in users %}
+                        <a href="{{ url_for('chat', user_id=user.id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" data-user-id="{{ user.id }}">
+                            <div>
+                                <h5 class="mb-1">{{ user.username }}</h5>
+                                <small class="text-muted last-login" data-user-id="{{ user.id }}">
+                                    最后登录: {{ user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else '从未登录' }}
+                                </small>
+                            </div>
+                            <div>
+                                <span class="badge bg-primary rounded-pill me-2">开始聊天</span>
+                                <span class="badge status-indicator" data-user-id="{{ user.id }}">
+                                    {{ '在线' if user.is_online else '离线' }}
+                                </span>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+    const socket = io();
+    const usersList = document.getElementById('users-list');
+    
+    // 更新用户状态
+    function updateUserStatus(userId, isOnline) {
+        const statusIndicator = document.querySelector(`.status-indicator[data-user-id="${userId}"]`);
+        if (statusIndicator) {
+            statusIndicator.className = `badge status-indicator ${isOnline ? 'bg-success' : 'bg-secondary'}`;
+            statusIndicator.textContent = isOnline ? '在线' : '离线';
+        }
+    }
+    
+    // 更新最后登录时间
+    function updateLastLogin(userId, lastLogin) {
+        const lastLoginElement = document.querySelector(`.last-login[data-user-id="${userId}"]`);
+        if (lastLoginElement) {
+            lastLoginElement.textContent = `最后登录: ${lastLogin}`;
+        }
+    }
+    
+    // 重新排序用户列表
+    function reorderUsers(users) {
+        const listItems = Array.from(usersList.children);
+        listItems.sort((a, b) => {
+            const aId = parseInt(a.dataset.userId);
+            const bId = parseInt(b.dataset.userId);
+            const aUser = users.find(u => u.id === aId);
+            const bUser = users.find(u => u.id === bId);
+            return new Date(bUser.last_login) - new Date(aUser.last_login);
+        });
+        
+        listItems.forEach(item => usersList.appendChild(item));
+    }
+    
+    // 更新用户列表
+    function updateUsersList(users) {
+        const existingUsers = new Set(Array.from(usersList.children).map(item => parseInt(item.dataset.userId)));
+        const newUsers = new Set(users.map(user => user.id));
+        
+        // 移除不存在的用户
+        Array.from(usersList.children).forEach(item => {
+            const userId = parseInt(item.dataset.userId);
+            if (!newUsers.has(userId)) {
+                item.remove();
+            }
+        });
+        
+        // 更新或添加用户
+        users.forEach(user => {
+            let userElement = document.querySelector(`[data-user-id="${user.id}"]`).closest('.list-group-item');
+            if (!userElement) {
+                // 创建新用户元素
+                userElement = document.createElement('a');
+                userElement.href = `/chat/${user.id}`;
+                userElement.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                userElement.dataset.userId = user.id;
+                userElement.innerHTML = `
+                    <div>
+                        <h5 class="mb-1">${user.username}</h5>
+                        <small class="text-muted last-login" data-user-id="${user.id}">
+                            最后登录: ${user.last_login || '从未登录'}
+                        </small>
+                    </div>
+                    <div>
+                        <span class="badge bg-primary rounded-pill me-2">开始聊天</span>
+                        <span class="badge status-indicator" data-user-id="${user.id}">
+                            ${user.is_online ? '在线' : '离线'}
+                        </span>
+                    </div>
+                `;
+                usersList.appendChild(userElement);
+            } else {
+                // 更新现有用户元素
+                updateUserStatus(user.id, user.is_online);
+                updateLastLogin(user.id, user.last_login);
+            }
+        });
+        
+        // 重新排序
+        reorderUsers(users);
+    }
+    
+    // 接收用户状态更新
+    socket.on('user_status_update', function(data) {
+        updateUserStatus(data.user_id, data.is_online);
+    });
+    
+    // 接收用户列表更新
+    socket.on('users_list_update', function(data) {
+        updateUsersList(data.users);
+    });
+    
+    // 定期请求更新
+    function requestUpdate() {
+        socket.emit('request_users_update');
+    }
+    
+    // 初始请求
+    requestUpdate();
+    
+    // 每3秒更新一次
+    setInterval(requestUpdate, 3000);
+</script>
+{% endblock %} 

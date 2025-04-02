@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="text-center mt-5">
+    <h1>欢迎使用聊天应用</h1>
+    <p class="lead">请登录或注册以开始聊天</p>
+    <div class="mt-4">
+        <a href="{{ url_for('login') }}" class="btn btn-primary me-2">登录</a>
+        <a href="{{ url_for('register') }}" class="btn btn-outline-primary">注册</a>
+    </div>
+</div>
+{% endblock %} 
