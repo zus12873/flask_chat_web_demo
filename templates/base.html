@@ -9,30 +9,51 @@
     {% block head %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    {% block navbar %}
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('index') }}">聊天应用</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    {% if current_user.is_authenticated %}
+                <ul class="navbar-nav me-auto">
+                    {% if current_user.is_authenticated and current_user.is_admin %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('users') }}">用户列表</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('logout') }}">退出</a>
-                    </li>
-                    {% else %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('login') }}">登录</a>
-                    </li>
                     {% endif %}
                 </ul>
+                <div class="navbar-nav">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            {% if current_user.wechat_headimgurl %}
+                            <img src="{{ current_user.wechat_headimgurl }}" class="rounded-circle me-1" style="width: 24px; height: 24px;" alt="">
+                            {% endif %}
+                            {{ current_user.username }}
+                            {% if current_user.is_admin %}
+                            <span class="badge bg-danger">管理员</span>
+                            {% endif %}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('profile') }}">个人资料</a></li>
+                            {% if current_user.is_admin %}
+                            <li><a class="dropdown-item" href="{{ url_for('users') }}">用户管理</a></li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">退出登录</a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <a class="nav-link" href="{{ url_for('login') }}">登录</a>
+                    <a class="nav-link" href="{{ url_for('register') }}">注册</a>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </nav>
+    {% endblock %}
 
     <div class="container mt-4">
         {% block content %}{% endblock %}
